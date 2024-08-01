@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlSarya Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        #game-container {
+            width: 800px;
+            height: 600px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .side-menu {
+            position: absolute;
+            top: 0;
+            left: -200px;
+            width: 200px;
+            height: 100%;
+            background-color: #333;
+            color: white;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #score-pane,
+        #timer {
+            position: absolute;
+            top: 20px;
+            font-size: 24px;
+        }
+
+        #score-pane {
+            left: 20px;
+        }
+
+        #timer {
+            right: 20px;
+        }
+
+        #question-display {
+            text-align: center;
+            font-size: 24px;
+            margin-top: 100px;
+        }
+
+        .answer-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 50px;
+        }
+
+        .answer-button {
+            width: 45%;
+            margin: 10px;
+            padding: 15px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #start-button,
+        #menu-button {
+            position: absolute;
+            bottom: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #008CBA;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #start-button {
+            left: 20px;
+        }
+
+        #menu-button {
+            right: 20px;
+        }
+
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="game-container">
+        <div class="side-menu">
+            <!-- Side menu content -->
+        </div>
+        <div id="score-pane">Score: <span id="score">0</span></div>
+        <div id="timer">30</div>
+        <div id="question-display"></div>
+        <div class="answer-container">
+            <button class="answer-button" aria-label="Answer 1"></button>
+            <button class="answer-button" aria-label="Answer 2"></button>
+            <button class="answer-button" aria-label="Answer 3"></button>
+            <button class="answer-button" aria-label="Answer 4"></button>
+        </div>
+        <button id="start-button">Start Game</button>
+        <button id="menu-button">Menu</button>
+        <div id="game-over-screen">
+            <h2>Game Over</h2>
+            <p>Your score: <span id="final-score"></span></p>
+            <div id="question-count"></div>
+            <perspective-viewer></perspective-viewer>
+            <ally-malinka></ally-malinka>
+        </div>
+        <div id="game-over-screen">
+            <h2>Game Over</h2>
+            <p>Your score: <span id="final-score"></span></p>
+        </div>
+    </div>
+    <!-- <script type="module" src="./game.js"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.6.1/gsap.min.js"></script>
+    <script>
+        class AlSaryaGameClass {
+            constructor() {
+                this.PHOTO_VIEW_WAIT = 10;
+                this.TOTAL_QUESTIONS_ROUND = 10;
+                this.clockTimeNow = 20;
+                this.clockResetTime = this.clockTimeNow;
+                this.mainScore = 0;
+                this.queCount = 1;
+                this.answerClicked = false;
+                this.haveData = false;
+                this.serverLINK = "https://alsarya.tv/bl.php?act=config";
+
+                this.gameState = new GameState();
+                this.uiElements = new UIElements();
+                this.soundManager = new SoundManager();
+                this.animationManager = new AnimationManager();
+                this.questionManager = new QuestionManager(this.serverLINK);
+                this.scoreManager = new ScoreManager(this.uiElements.scorePane);
+                this.timerManager = new TimerManager(this.uiElements.mcTimer);
+                this.settingsManager = new SettingsManager();
+
+                this.setupEventListeners();
+                this.loadSettings();
+                this.prepGameSounds();
+            }
+
+            setupEventListeners() {
+                this.uiElements.startButton.addEventListener('click', () => this.startClicked());
+                this.uiElements.menuButton.addEventListener('click', () => this.animationManager.showSideMenu());
+                this.uiElements.answerButtons.forEach(button => {
+                    button.addEventListener('click', (event) => this.optionClicked(event));
+                });
+            }
+
+            loadSettings() {
+                this.settingsManager.loadSettings(settings => {
+                    this.applySettings(settings);
+                    this.questionManager.loadQuestions();
+                });
+            }
+
+            startClicked() {
+                this.mainScore = 0;
+                this.scoreManager.resetScore();
+                this.animationManager.playIntroAnimation(() => this.startGame());
+            }
+
+            startGame() {
+                this.gameState.reset();
+                this.gameState.currentQuestionIndex = 0;
+                this.playIntroAnimation();
+            }
+
+            showNextQuestion() {
+                if (this.gameState.currentQuestionIndex < this.TOTAL_QUESTIONS_ROUND) {
+                    this.questionManager.getNextQuestion().then(question => {
+                        this.displayQuestion(question);
+                        this.timerManager.startTimer(() => this.onTimerComplete());
+                    });
+                } else {
+                    this.endGame();
+                }
+            }
+
+            displayQuestion(question) {
+                this.uiElements.updateQuestionDisplay(question);
+                this.animationManager.playQuestionAnimation();
+                if (question.catid === "2") {
+                    this.showPicture(question.imageUrl);
+                } else if (question.catid === "3") {
+                    this.showVideo(question.videoUrl);
+                }
+            }
+
+            showPicture(imageUrl) {
+                // Implementation for showing picture
+                this.animationManager.showPictureAnimation(imageUrl);
+            }
+
+            showVideo(videoUrl) {
+                // Implementation for showing video
+                this.animationManager.showVideoAnimation(videoUrl);
+            }
+
+            optionClicked(event) {
+                if (this.answerClicked) return;
+                this.answerClicked = true;
+
+                const chosenOption = event.target.dataset.option;
+                const isCorrect = this.questionManager.checkAnswer(chosenOption);
+
+                if (isCorrect) {
+                    this.mainScore += this.timerManager.getCurrentTime();
+                    this.scoreManager.updateScore(this.mainScore);
+                    this.soundManager.playSound('correct');
+                } else {
+                    this.animationManager.playWrongAnswerAnimation(event.target);
+                    this.soundManager.playSound('wrong');
+                }
+
+                this.animationManager.playRightAnswerAnimation(this.questionManager.getCurrentQuestion().cans);
+                this.timerManager.stopTimer();
+
+                setTimeout(() => {
+                    this.answerClicked = false;
+                    this.showNextQuestion();
+                }, 1500);
+            }
+
+            onTimerComplete() {
+                this.showNextQuestion();
+            }
+
+            endGame() {
+                this.animationManager.playGameOverAnimation(() => {
+                    console.log("Game Over");
+                    this.uiElements.showGameOverScreen(this.scoreManager.getScore());
+                });
+            }
+
+            applySettings(settings) {
+                this.TOTAL_QUESTIONS_ROUND = settings.totalQuestions || this.TOTAL_QUESTIONS_ROUND;
+                // Apply other settings as needed
+            }
+
+            prepGameSounds() {
+                this.soundManager.loadSound('ticker', 'assets/sounds/clockTick.mp3');
+                this.soundManager.loadSound('correct', 'assets/sounds/magicWand.mp3');
+                this.soundManager.loadSound('wrong', 'assets/sounds/timeA.mp3');
+                this.soundManager.loadSound('bgMusic', 'assets/sounds/yoshTrack.mp3', true);
+            }
+        }
+
+        class GameState {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.currentQuestionIndex = 0;
+                this.isGameOver = false;
+            }
+        }
+
+        class UIElements {
+            constructor() {
+                this.scorePane = document.getElementById('score-pane');
+                this.mcTimer = document.getElementById('timer');
+                this.startButton = document.getElementById('start-button');
+                this.menuButton = document.getElementById('menu-button');
+                this.questionDisplay = document.getElementById('question-display');
+                this.answerButtons = document.querySelectorAll('.answer-button');
+            }
+
+            updateQuestionDisplay(question) {
+                this.questionDisplay.textContent = question.theq;
+                this.answerButtons.forEach((button, index) => {
+                    button.textContent = question[`ans${index + 1}`];
+                });
+            }
+
+            showGameOverScreen(score) {
+                document.getElementById('game-over-screen').style.display = 'flex';
+                document.getElementById('final-score').textContent = score;
+            }
+        }
+
+        class SoundManager {
+            constructor() {
+                this.sounds = {};
+            }
+
+            loadSound(name, url, loop = false) {
+                this.sounds[name] = new Audio(url);
+                this.sounds[name].loop = loop;
+            }
+
+            playSound(name) {
+                if (this.sounds[name]) {
+                    this.sounds[name].play();
+                }
+            }
+        }
+
+        class AnimationManager {
+            showSideMenu() {
+                gsap.to('.side-menu', { duration: 0.5, x: 0 });
+            }
+
+            playIntroAnimation(callback) {
+                const tl = gsap.timeline({ onComplete: callback });
+                tl.from('.intro-element', { duration: 1, opacity: 0, y: 50, stagger: 0.2 });
+            }
+
+            playQuestionAnimation() {
+                gsap.from('#question-display, .answer-button', { duration: 0.5, opacity: 0, y: -20, stagger: 0.1 });
+            }
+
+            playGameOverAnimation(callback) {
+                const tl = gsap.timeline({ onComplete: callback });
+                tl.to('.game-element', { duration: 0.5, opacity: 0, y: 20, stagger: 0.1 });
+            }
+
+            showPictureAnimation(imageUrl) {
+                // Implementation for picture animation
+            }
+
+            showVideoAnimation(videoUrl) {
+                // Implementation for video animation
+            }
+
+            playWrongAnswerAnimation(element) {
+                gsap.to(element, { duration: 0.2, x: 10, repeat: 3, yoyo: true });
+            }
+
+            playRightAnswerAnimation(correctAnswerIndex) {
+                gsap.to(`.answer-button[data-option="${correctAnswerIndex}"]`, { duration: 0.5, scale: 1.1, repeat: 1, yoyo: true });
+            }
+        }
+
+        class QuestionManager {
+            constructor(serverLink) {
+                this.serverLink = serverLink;
+                this.questions = [];
+                this.currentQuestionIndex = 0;
+            }
+
+            loadQuestions() {
+                return fetch(this.serverLink)
+                    .then(response => response.json())
+                    .then(data => {
+                        this.questions = data;
+                    });
+            }
+
+            getNextQuestion() {
+                if (this.currentQuestionIndex < this.questions.length) {
+                    return Promise.resolve(this.questions[this.currentQuestionIndex++]);
+                } else {
+                    return this.loadQuestions().then(() => {
+                        this.currentQuestionIndex = 0;
+                        return this.questions[this.currentQuestionIndex++];
+                    });
+                }
+            }
+
+            checkAnswer(chosenOption) {
+                return chosenOption === this.getCurrentQuestion().cans;
+            }
+
+            getCurrentQuestion() {
+                return this.questions[this.currentQuestionIndex - 1];
+            }
+        }
+
+        class ScoreManager {
+            constructor(scoreDisplay) {
+                this.scoreDisplay = scoreDisplay;
+                this.score = 0;
+            }
+
+            resetScore() {
+                this.score = 0;
+                this.updateDisplay();
+            }
+
+            updateScore(newScore) {
+                this.score = newScore;
+                this.updateDisplay();
+            }
+
+            getScore() {
+                return this.score;
+            }
+
+            updateDisplay() {
+                this.scoreDisplay.textContent = this.score;
+            }
+        }
+
+        class TimerManager {
+            constructor(timerDisplay) {
+                this.timerDisplay = timerDisplay;
+                this.currentTime = 0;
+                this.timerInterval = null;
+            }
+
+            startTimer(callback) {
+                this.currentTime = 30;
+                this.updateDisplay();
+                this.timerInterval = setInterval(() => {
+                    this.currentTime--;
+                    this.updateDisplay();
+                    if (this.currentTime <= 0) {
+                        this.stopTimer();
+                        callback();
+                    }
+                }, 1000);
+            }
+
+            stopTimer() {
+                clearInterval(this.timerInterval);
+            }
+
+            getCurrentTime() {
+                return this.currentTime;
+            }
+
+            updateDisplay() {
+                this.timerDisplay.textContent = this.currentTime;
+            }
+        }
+
+        class SettingsManager {
+            loadSettings(callback) {
+                fetch('assets/settings.json')
+                    .then(response => response.json())
+                    .then(data => {
+                        callback(data);
+                    });
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new AlSaryaGameClass();
+        });
+
+    </script>
+</body>
+</body>
+
+</html>

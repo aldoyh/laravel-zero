@@ -28,6 +28,8 @@ class InspireCommand extends Command
      */
     public function handle(): void
     {
+        $this->notify('Inspiring Quote', 'Simplicity is the ultimate sophistication.');
+
         render(<<<'HTML'
             <div class="py-1 ml-2">
                 <div class="px-1 bg-blue-300 text-black">Laravel Zero</div>
@@ -43,6 +45,6 @@ class InspireCommand extends Command
      */
     public function schedule(Schedule $schedule): void
     {
-        // $schedule->command(static::class)->everyMinute();
+        $schedule->command(static::class)->everyMinute();
     }
 }

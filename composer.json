@@ -16,8 +16,12 @@
         }
     ],
     "require": {
-        "php": "^8.2.0",
-        "laravel-zero/framework": "^11.0.0"
+        "php": "^8.3",
+        "illuminate/redis": "^11.5",
+        "laravel-zero/framework": "^11.0.0",
+        "laravel-zero/phar-updater": "^1.4",
+        "nunomaduro/laravel-console-dusk": "^1.13",
+        "nunomaduro/laravel-console-menu": "^3.5"
     },
     "require-dev": {
         "laravel/pint": "^1.15.2",
@@ -46,5 +50,5 @@
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "bin": ["application"]
+    "bin": ["tiny"]
 }
